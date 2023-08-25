@@ -74,15 +74,17 @@ Ledru</h4>
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
 <p>This is a tutorial for applying RENIN to a single nucleus multiome
-dataset. For this tutorial, we will use an adult human kidney single
-cell dataset that we generated for this work. The full dataset can be
+dataset.</p>
+<p>For this tutorial, we will use an adult human kidney single cell
+dataset that we generated for this work. The full dataset can be
 downloaded from GEO or a smaller subsampled dataset is downloadable from
-this repository. This tutorial starts after the creation, quality
-control, and preprocessing of a Seurat object and provides an example of
-how RENIN might be applied for regulatory element prediction.</p>
+this repository.</p>
+<p>This tutorial starts after the creation, quality control, and
+preprocessing of a Seurat object and provides an example of how RENIN
+might be applied for regulatory element prediction.</p>
 </div>
 <div class="section level2">
-<h2 id="preprocessing-and-setup">Preprocessing and setup<a class="anchor" aria-label="anchor" href="#preprocessing-and-setup"></a>
+<h2 id="setup-environment">Setup environment<a class="anchor" aria-label="anchor" href="#setup-environment"></a>
 </h2>
 <p>We first prepare the environment and load the Seurat object.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
@@ -96,36 +98,59 @@ how RENIN might be applied for regulatory element prediction.</p>
 <div class="section level2">
 <h2 id="predicting-cres-with-renin">Predicting CREs with RENIN<a class="anchor" aria-label="anchor" href="#predicting-cres-with-renin"></a>
 </h2>
+<div class="section level4">
+<h4 id="generate-pseudocell-for-cre-inference">Generate pseudocell for CRE inference<a class="anchor" aria-label="anchor" href="#generate-pseudocell-for-cre-inference"></a>
+</h4>
 <p>RENIN can be used to predict regulators of differential expression
-between two cell states. We choose to pseudobulk using a modified
-version of <a href="https://github.com/YosefLab/VISION" class="external-link">VISION’s</a>
-microclustering algorithm to reduce effects of sparsity and noise. On
-our ~50,000 cell dataset, targeting 100 cells per pseudocell was a good
-starting point.</p>
+between two cell states.</p>
+<ul>
+<li>We choose to pseudobulk using a modified version of
+<a href="https://github.com/YosefLab/VISION" target="_blank" class="external-link">
+VISION’s</a> microclustering algorithm to reduce effects of sparsity and
+noise.</li>
+<li>On our ~50,000 cell dataset, targeting 100 cells per pseudocell was
+a good starting point.</li>
+</ul>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mats</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/prepare_pseudocell_matrix.html">prepare_pseudocell_matrix</a></span><span class="op">(</span><span class="va">multi</span>, assay <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"peaks"</span>, <span class="st">"SCT"</span><span class="op">)</span>, cells_per_partition <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span><span class="va">expr_mat</span> <span class="op">&lt;-</span> <span class="va">mats</span><span class="op">[[</span><span class="st">"SCT"</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="va">peak_mat</span> <span class="op">&lt;-</span> <span class="va">mats</span><span class="op">[[</span><span class="st">"peaks"</span><span class="op">]</span><span class="op">]</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="predict-cre">Predict CRE<a class="anchor" aria-label="anchor" href="#predict-cre"></a>
+</h4>
 <p>A good starting point is modeling the genes that are differentially
-expressed. For its first step to predict CREs, we use the full dataset
+expressed.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">mpt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">multi</span>, <span class="va">celltype</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"PCT"</span>, <span class="st">"PST"</span>, <span class="st">"KIM1+ PT"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">de.genes</span> <span class="op">=</span> <span class="fu"><a href="../reference/prepare_degs.html">prepare_degs</a></span><span class="op">(</span><span class="va">mpt</span>, ident.1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"PCT"</span>, <span class="st">"PST"</span><span class="op">)</span>, ident.2 <span class="op">=</span> <span class="st">"KIM1+ PT"</span><span class="op">)</span></span>
+<span><span class="va">gene_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">de.genes</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">100</span><span class="op">]</span></span></code></pre></div>
+<p>For its first step to predict CREs, we use the full dataset
 containing all cell types, because fewer CREs may have differential
 accessibility between two related cell types/states, relative to the
 accessibility differences between those two clusters and the rest of the
-dataset. We default to include all CREs in order to include all
-potential relevant regulatory TFs. For the adaptive elastic net step,
-lambda2 = 0.5 and num_bootstraps = 100 are good defaults to achieve good
-model performance and relatively short runtime.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">mpt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">multi</span>, <span class="va">celltype</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"PCT"</span>, <span class="st">"PST"</span>, <span class="st">"KIM1+ PT"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">gene_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="fu"><a href="../reference/prepare_degs.html">prepare_degs</a></span><span class="op">(</span><span class="va">mpt</span>, ident.1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"PCT"</span>, <span class="st">"PST"</span><span class="op">)</span>, ident.2 <span class="op">=</span> <span class="st">"KIM1+ PT"</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">100</span><span class="op">]</span></span>
-<span><span class="va">peak_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_peak_aen.html">run_peak_aen</a></span><span class="op">(</span><span class="va">multi</span>, <span class="va">expr_mat</span>, <span class="va">peak_mat</span>, <span class="va">gene_list</span>, lambda2 <span class="op">=</span> <span class="fl">0.5</span>, max_distance <span class="op">=</span> <span class="fl">5e+05</span>, num_bootstraps <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
+dataset.</p>
+<ul>
+<li>We default to include all CREs in order to include all potential
+relevant regulatory TFs.</li>
+<li>For the adaptive elastic net step, lambda2 = 0.5 and num_bootstraps
+= 100 are good defaults to achieve good model performance and relatively
+short runtime.</li>
+</ul>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">peak_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_peak_aen.html">run_peak_aen</a></span><span class="op">(</span><span class="va">multi</span>, <span class="va">expr_mat</span>, <span class="va">peak_mat</span>, <span class="va">gene_list</span>, lambda2 <span class="op">=</span> <span class="fl">0.5</span>, max_distance <span class="op">=</span> <span class="fl">5e+05</span>, num_bootstraps <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span><span class="va">aen_lists</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_aen_lists.html">make_aen_lists</a></span><span class="op">(</span><span class="va">peak_results</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="optional-visualize-motif-enrichment-in-the-predicted-cres">[Optional] Visualize motif enrichment in the predicted CREs<a class="anchor" aria-label="anchor" href="#optional-visualize-motif-enrichment-in-the-predicted-cres"></a>
+</h4>
+<p>[This section can be skipped].</p>
 <p>As a starting point for analysis, we can look for motif enrichment in
 the predicted CREs. Of the modeled genes, we identify so-called “failed
 repair” genes as those that are upregulated in KIM1+ PT relative to the
 healthy PCT and PST clusters. We can plot motif enrichment in CREs that
 are predicted to promote a failed repair gene expression program.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fr_genes</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">de.genes</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">de.genes</span><span class="op">$</span><span class="va">avg_log2FC</span> <span class="op">&lt;</span> <span class="fl">0</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="va">all_cres</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="va">aen_lists</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">cre_scores</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">peak_results</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">[[</span><span class="fl">4</span><span class="op">]</span><span class="op">]</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/sets.html" class="external-link">union</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">x</span><span class="op">[[</span><span class="fl">4</span><span class="op">]</span><span class="op">]</span><span class="op">[</span>, <span class="st">"coef_if_kept"</span><span class="op">]</span> <span class="op">!=</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span>, <span class="st">"coef_if_kept"</span><span class="op">]</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span><span class="va">x</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">fr_genes</span>, <span class="op">-</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
@@ -139,31 +164,60 @@ are predicted to promote a failed repair gene expression program.</p>
 <span><span class="va">h_cres</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">cre_total_scores_sums</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">cre_total_scores_sums</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span><span class="op">]</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/plot_motif_enrichment.html">plot_motif_enrichment</a></span><span class="op">(</span><span class="va">multi</span>, <span class="va">fr_cres</span>, num_top_label <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></code></pre></div>
+<p><img src="images/plot_motif_enrichment.png" width="400px"></p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="predicting-gene-specific-regulating-tfs-with-renin">Predicting gene-specific regulating TFs with RENIN<a class="anchor" aria-label="anchor" href="#predicting-gene-specific-regulating-tfs-with-renin"></a>
+</h2>
 <p>RENIN’s second step identifies TFs with motifs within the linked
 CREs, then runs an adaptive elastic net step to predict which TFs are
-likely to regulate the target gene. Since we do not use the sparser
-chromatin accessibility modality for this step, we can target fewer
-cells per pseudocell.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">expr_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/prepare_pseudocell_matrix.html">prepare_pseudocell_matrix</a></span><span class="op">(</span><span class="va">mpt</span>, assay <span class="op">=</span> <span class="st">"SCT"</span>, cells_per_partition <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
-<span><span class="va">tf_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_tf_aen.html">run_tf_aen</a></span><span class="op">(</span><span class="va">mpt</span>, <span class="va">expr_mat</span>, <span class="va">peak_results</span>, <span class="va">gene_list</span>, lambda2 <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
+likely to regulate the target gene.</p>
+<div class="section level4">
+<h4 id="generate-pseudocell-for-tf-inference">Generate pseudocell for TF inference<a class="anchor" aria-label="anchor" href="#generate-pseudocell-for-tf-inference"></a>
+</h4>
+<p>Since we do not use the sparser chromatin accessibility modality for
+this step, we can target fewer (by default, 10) cells per
+pseudocell.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">expr_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/prepare_pseudocell_matrix.html">prepare_pseudocell_matrix</a></span><span class="op">(</span><span class="va">mpt</span>, assay <span class="op">=</span> <span class="st">"SCT"</span>, cells_per_partition <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="predict-cre-specific-tf-effects">Predict CRE-specific TF effects<a class="anchor" aria-label="anchor" href="#predict-cre-specific-tf-effects"></a>
+</h4>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">tf_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_tf_aen.html">run_tf_aen</a></span><span class="op">(</span><span class="va">mpt</span>, <span class="va">expr_mat</span>, <span class="va">peak_results</span>, <span class="va">gene_list</span>, lambda2 <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">regulator_tf_names</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="va">multi</span><span class="op">@</span><span class="va">assays</span><span class="op">$</span><span class="va">peaks</span><span class="op">@</span><span class="va">motifs</span><span class="op">@</span><span class="va">motif.names</span><span class="op">)</span></span>
 <span><span class="va">regulator_tf_names</span> <span class="op">&lt;-</span> <span class="va">regulator_tf_names</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">regulator_tf_names</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="fu"><a href="https://mojaveazure.github.io/seurat-object/reference/AssayData.html" class="external-link">GetAssayData</a></span><span class="op">(</span><span class="va">multi</span>, assay <span class="op">=</span> <span class="st">"SCT"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
-<p>We can then rank TFs by predicted regulatory score. To calculate each
-TF’s score, we sum its estimated regulatory coefficients across all
-modeled genes, then weight by expression. If studying a trajectory, you
-can input a vector of genes to be weighted negatively. This allows for
-delineation between TFs that are associated with one side of the
-trajectory versus the other. Since our ranking approach also factors in
-TF expression, it might be useful to rank TFs by centrality as well.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+</div>
+<div class="section level4">
+<h4 id="visualize-tf-rankings">Visualize TF rankings<a class="anchor" aria-label="anchor" href="#visualize-tf-rankings"></a>
+</h4>
+<p>We can then rank TFs by predicted regulatory score.</p>
+<ul>
+<li>To calculate each TF’s score, we sum its estimated regulatory
+coefficients across all modeled genes, then weight by expression.</li>
+<li>If studying a trajectory, you can input a vector of genes to be
+weighted negatively. This allows for delineation between TFs that are
+associated with one side of the trajectory versus the other.</li>
+</ul>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tf_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/rank_tfs.html">rank_tfs</a></span><span class="op">(</span><span class="va">tf_results</span>, <span class="va">mpt</span>, <span class="va">fr_genes</span>, <span class="va">regulator_tf_names</span>, num_cores <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/plot_tf_rankings.html">plot_tf_rankings</a></span><span class="op">(</span><span class="va">tf_df</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">centrality_rankings</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/rank_tfs_by_centrality.html">rank_tfs_by_centrality</a></span><span class="op">(</span><span class="va">tf_results</span>, <span class="va">mpt</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/plot_tf_rankings.html">plot_tf_rankings</a></span><span class="op">(</span><span class="va">tf_df</span><span class="op">)</span></span></code></pre></div>
+<p><img src="images/plot_tf_rankings.png" width="400px"></p>
+</div>
+<div class="section level4">
+<h4 id="optional-rank-tfs-by-centrality">[Optional] Rank TFs by centrality<a class="anchor" aria-label="anchor" href="#optional-rank-tfs-by-centrality"></a>
+</h4>
+<p>Since our ranking approach also factors in TF expression, it might be
+useful to rank TFs by centrality as well.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">centrality_rankings</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/rank_tfs_by_centrality.html">rank_tfs_by_centrality</a></span><span class="op">(</span><span class="va">tf_results</span>, <span class="va">mpt</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">centrality_rankings</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, n <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">centrality_rankings</span><span class="op">[[</span><span class="fl">2</span><span class="op">]</span><span class="op">]</span>, n <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></code></pre></div>
+<p><strong>ESRRG</strong>: 2362.5<br><strong>FOSL2</strong>: 1891.5<br><strong>MLXIPL</strong>: 0<br><strong>MYCN</strong>: 0<br><strong>TCF12</strong>: 0<br><strong>ARNT2</strong>: 0<br><strong>SREBF2</strong>: 0<br><strong>BACH2</strong>: 0<br><strong>JUN</strong>: 0<br><strong>MAF</strong>: 0<br></p>
+<p><strong>BACH2</strong>: 0.00440082608429252<br><strong>HNF4A</strong>: 0.00358041084460182<br><strong>ARNT2</strong>: 0.0035757804040999<br><strong>MEF2A</strong>: 0.00341289182564679<br><strong>FOSL1</strong>: 0.00335173645748952<br><strong>FOSL2</strong>: 0.00326196417548944<br><strong>TCF12</strong>: 0.00325942429318295<br><strong>KLF6</strong>: 0.00324040156752685<br><strong>PPARA</strong>: 0.00323273905631062<br><strong>NFAT5</strong>: 0.00310403256911354<br></p>
 <style type="text/css">
 
 h1 {
@@ -178,6 +232,7 @@ h4.date {
   font-size: 18px;
 }
 </style>
+</div>
 </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside>
